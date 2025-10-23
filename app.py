@@ -90,12 +90,16 @@ if st.button("🚀 Start Scraping", type="primary", use_container_width=True):
             st.caption("This may take a while depending on the number of results. Please be patient.")
 
         try:
-            # Perform the scraping
-            results = scrape_carousell(
-                query=search_query,
-                max_results=max_results,
-                headless=headless_mode
-            )
+            # Perform the scraping using context manager to get scraper instance
+            from carousell_scraper import CarousellScraper
+            scraper = CarousellScraper(headless=headless_mode)
+
+            try:
+                results = scraper.search(query=search_query, max_results=max_results)
+            finally:
+                # Store screenshot before closing
+                debug_screenshot = scraper.debug_screenshot
+                scraper.close()
 
             progress_bar.progress(100)
             status_placeholder.empty()
@@ -154,6 +158,12 @@ if st.button("🚀 Start Scraping", type="primary", use_container_width=True):
             else:
                 st.warning("⚠️ No results found. The page structure may have changed or no items matched your search.")
                 st.info("💡 Try a different search term or check if the website is accessible.")
+
+                # Display debug screenshot if available
+                if debug_screenshot:
+                    st.subheader("🔍 Debug Screenshot")
+                    st.caption("This is what the browser saw when trying to scrape:")
+                    st.image(debug_screenshot, caption="Page Screenshot", use_container_width=True)
 
         except Exception as e:
             progress_bar.empty()

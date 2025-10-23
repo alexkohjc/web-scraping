@@ -31,6 +31,7 @@ class CarousellScraper:
         self.base_url = "https://www.carousell.sg"
         self.driver = None
         self.browser = browser
+        self.debug_screenshot = None  # Store screenshot bytes for debugging
 
     def _detect_browser(self) -> Optional[str]:
         """Detect which browser is available on the system"""
@@ -262,11 +263,12 @@ class CarousellScraper:
                 print("Could not find any product listings. The page structure may have changed.")
                 # Save screenshot for debugging
                 try:
-                    screenshot_path = "debug_screenshot.png"
-                    self.driver.save_screenshot(screenshot_path)
-                    print(f"Saved debug screenshot to: {screenshot_path}")
-                except:
-                    pass
+                    self.debug_screenshot = self.driver.get_screenshot_as_png()
+                    print(f"Saved debug screenshot in memory")
+                    print(f"Current URL: {self.driver.current_url}")
+                    print(f"Page title: {self.driver.title}")
+                except Exception as e:
+                    print(f"Could not capture screenshot: {e}")
                 return results
 
             print(f"Processing {min(len(all_listings), max_results)} listings...")
