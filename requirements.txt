@@ -4,6 +4,7 @@ beautifulsoup4>=4.12.0
 lxml>=4.9.0
 selenium>=4.15.0
 webdriver-manager>=4.0.1
+selenium-manager>=1.0.0
 
 # Frontend
 streamlit>=1.28.0
