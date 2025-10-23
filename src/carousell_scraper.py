@@ -69,61 +69,109 @@ class CarousellScraper:
             raise ValueError(f"Unsupported browser: {browser}")
 
     def _setup_chrome(self):
-        """Setup Chrome/Chromium driver"""
+        """Setup Chrome/Chromium driver with undetected-chromedriver"""
         try:
-            from selenium.webdriver.chrome.options import Options
+            import undetected_chromedriver as uc
 
-            print("Setting up Chrome driver...")
-            chrome_options = Options()
+            print("Setting up undetected Chrome driver to bypass bot detection...")
 
+            # Configure options for undetected-chromedriver
+            options = uc.ChromeOptions()
+
+            # Headless mode (if requested)
             if self.headless:
-                chrome_options.add_argument("--headless=new")
+                options.add_argument("--headless=new")
 
-            # Add options to make the browser appear more human-like
-            chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-            chrome_options.add_argument("--no-sandbox")
-            chrome_options.add_argument("--disable-dev-shm-usage")
-            chrome_options.add_argument("--disable-gpu")
-            chrome_options.add_argument("--window-size=1920,1080")
-            chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            # Essential options for cloud environments
+            options.add_argument("--no-sandbox")
+            options.add_argument("--disable-dev-shm-usage")
+            options.add_argument("--disable-gpu")
+            options.add_argument("--window-size=1920,1080")
 
-            # WSL2 and headless-specific fixes for DevToolsActivePort error
-            chrome_options.add_argument("--remote-debugging-port=9222")
-            chrome_options.add_argument("--disable-extensions")
-            chrome_options.add_argument("--disable-setuid-sandbox")
-            chrome_options.add_argument("--disable-software-rasterizer")
-            chrome_options.add_argument("--disable-background-networking")
-            chrome_options.add_argument("--disable-default-apps")
-            chrome_options.add_argument("--disable-sync")
-            chrome_options.add_argument("--metrics-recording-only")
-            chrome_options.add_argument("--mute-audio")
-            chrome_options.add_argument("--no-first-run")
-            chrome_options.add_argument("--safebrowsing-disable-auto-update")
-            chrome_options.add_argument("--ignore-certificate-errors")
-            chrome_options.add_argument("--ignore-ssl-errors")
+            # Additional stealth options
+            options.add_argument("--disable-blink-features=AutomationControlled")
+            options.add_argument("--disable-extensions")
+            options.add_argument("--disable-setuid-sandbox")
+            options.add_argument("--disable-software-rasterizer")
+            options.add_argument("--mute-audio")
+            options.add_argument("--no-first-run")
+            options.add_argument("--ignore-certificate-errors")
 
-            # Set page load strategy to 'eager' for faster loading
-            # 'eager' waits for DOM ready, not all resources (images, stylesheets)
-            chrome_options.page_load_strategy = 'eager'
+            # Set page load strategy
+            options.page_load_strategy = 'eager'
 
-            # Disable automation flags
-            chrome_options.add_experimental_option("excludeSwitches", ["enable-automation", "enable-logging"])
-            chrome_options.add_experimental_option('useAutomationExtension', False)
+            # Use undetected-chromedriver (automatically patches detection vectors)
+            print("Initializing undetected ChromeDriver...")
+            self.driver = uc.Chrome(
+                options=options,
+                driver_executable_path=None,  # Auto-detect
+                version_main=None,  # Auto-detect Chrome version
+                use_subprocess=True
+            )
 
-            # Use Selenium Manager (built into Selenium 4.6+) to automatically manage ChromeDriver
-            # Selenium Manager will automatically download the correct ChromeDriver version for Chrome 141
-            print("Using Selenium Manager to auto-download matching ChromeDriver...")
-            self.driver = webdriver.Chrome(options=chrome_options)
+            # Set timeouts
+            self.driver.set_page_load_timeout(30)
+            self.driver.implicitly_wait(3)
 
-            # Set timeouts to prevent hanging
-            self.driver.set_page_load_timeout(30)  # 30 second page load timeout
-            self.driver.implicitly_wait(3)  # Reduced to 3 seconds for faster performance
+            print("Undetected Chrome driver setup complete!")
 
-            # Execute script to hide webdriver property
-            self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-
+        except ImportError:
+            print("undetected-chromedriver not available, falling back to standard Selenium...")
+            # Fallback to standard Chrome if undetected-chromedriver not available
+            self._setup_chrome_fallback()
         except Exception as e:
             raise RuntimeError(f"Failed to setup Chrome driver: {e}\nTry installing Firefox instead.")
+
+    def _setup_chrome_fallback(self):
+        """Fallback to standard Chrome/Chromium driver"""
+        from selenium.webdriver.chrome.options import Options
+
+        print("Setting up standard Chrome driver...")
+        chrome_options = Options()
+
+        if self.headless:
+            chrome_options.add_argument("--headless=new")
+
+        # Add options to make the browser appear more human-like
+        chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--window-size=1920,1080")
+        chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+        # WSL2 and headless-specific fixes for DevToolsActivePort error
+        chrome_options.add_argument("--remote-debugging-port=9222")
+        chrome_options.add_argument("--disable-extensions")
+        chrome_options.add_argument("--disable-setuid-sandbox")
+        chrome_options.add_argument("--disable-software-rasterizer")
+        chrome_options.add_argument("--disable-background-networking")
+        chrome_options.add_argument("--disable-default-apps")
+        chrome_options.add_argument("--disable-sync")
+        chrome_options.add_argument("--metrics-recording-only")
+        chrome_options.add_argument("--mute-audio")
+        chrome_options.add_argument("--no-first-run")
+        chrome_options.add_argument("--safebrowsing-disable-auto-update")
+        chrome_options.add_argument("--ignore-certificate-errors")
+        chrome_options.add_argument("--ignore-ssl-errors")
+
+        # Set page load strategy to 'eager' for faster loading
+        chrome_options.page_load_strategy = 'eager'
+
+        # Disable automation flags
+        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation", "enable-logging"])
+        chrome_options.add_experimental_option('useAutomationExtension', False)
+
+        # Use Selenium Manager
+        print("Using Selenium Manager to auto-download matching ChromeDriver...")
+        self.driver = webdriver.Chrome(options=chrome_options)
+
+        # Set timeouts to prevent hanging
+        self.driver.set_page_load_timeout(30)
+        self.driver.implicitly_wait(3)
+
+        # Execute script to hide webdriver property
+        self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 
     def _setup_firefox(self):
         """Setup Firefox driver"""
