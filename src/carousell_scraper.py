@@ -274,6 +274,7 @@ class CarousellScraper:
             # Temporarily disable implicit wait for faster extraction
             self.driver.implicitly_wait(0)
 
+
             # Extract information from each listing
             for idx, listing in enumerate(all_listings[:max_results]):
                 try:
