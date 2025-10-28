@@ -3,6 +3,7 @@ Carousell.sg Web Scraper
 Scrapes product listings from Carousell.sg search results
 """
 
+import os
 import time
 import random
 import shutil
@@ -36,16 +37,44 @@ class CarousellScraper:
 
     def _detect_browser(self) -> Optional[str]:
         """Detect which browser is available on the system"""
-        browsers = {
-            'chrome': ['google-chrome', 'chrome', 'chromium', 'chromium-browser'],
-            'firefox': ['firefox'],
-        }
+        import platform
 
-        for browser_name, commands in browsers.items():
-            for cmd in commands:
-                if shutil.which(cmd):
-                    print(f"Detected {browser_name} browser: {cmd}")
-                    return browser_name
+        # Check for Chrome/Chromium
+        chrome_commands = ['google-chrome', 'chrome', 'chromium', 'chromium-browser']
+        chrome_paths_windows = [
+            r'C:\Program Files\Google\Chrome\Application\chrome.exe',
+            r'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe',
+            os.path.expanduser(r'~\AppData\Local\Google\Chrome\Application\chrome.exe'),
+        ]
+
+        # Try command-line detection first (works on Linux/Mac)
+        for cmd in chrome_commands:
+            if shutil.which(cmd):
+                print(f"Detected Chrome browser: {cmd}")
+                return 'chrome'
+
+        # On Windows, check specific paths
+        if platform.system() == 'Windows':
+            for chrome_path in chrome_paths_windows:
+                if Path(chrome_path).exists():
+                    print(f"Detected Chrome browser at: {chrome_path}")
+                    return 'chrome'
+
+        # Check for Firefox
+        firefox_paths_windows = [
+            r'C:\Program Files\Mozilla Firefox\firefox.exe',
+            r'C:\Program Files (x86)\Mozilla Firefox\firefox.exe',
+        ]
+
+        if shutil.which('firefox'):
+            print(f"Detected Firefox browser")
+            return 'firefox'
+
+        if platform.system() == 'Windows':
+            for firefox_path in firefox_paths_windows:
+                if Path(firefox_path).exists():
+                    print(f"Detected Firefox at: {firefox_path}")
+                    return 'firefox'
 
         return None
 
@@ -55,12 +84,21 @@ class CarousellScraper:
         browser = self.browser or self._detect_browser()
 
         if not browser:
-            raise RuntimeError(
-                "No supported browser found. Please install Chrome/Chromium or Firefox.\n"
-                "For WSL2/Ubuntu:\n"
-                "  Chrome: sudo apt update && sudo apt install -y chromium-browser\n"
-                "  Firefox: sudo apt update && sudo apt install -y firefox\n"
-            )
+            import platform
+            if platform.system() == 'Windows':
+                error_msg = (
+                    "No supported browser found. Please install Google Chrome or Firefox.\n"
+                    "Download Chrome: https://www.google.com/chrome/\n"
+                    "Download Firefox: https://www.mozilla.org/firefox/\n"
+                )
+            else:
+                error_msg = (
+                    "No supported browser found. Please install Chrome/Chromium or Firefox.\n"
+                    "For Ubuntu/WSL2:\n"
+                    "  Chrome: sudo apt update && sudo apt install -y chromium-browser\n"
+                    "  Firefox: sudo apt update && sudo apt install -y firefox\n"
+                )
+            raise RuntimeError(error_msg)
 
         if browser == 'chrome':
             self._setup_chrome()
@@ -105,20 +143,35 @@ class CarousellScraper:
         # Set page load strategy to 'eager' for faster loading
         chrome_options.page_load_strategy = 'eager'
 
-        # Try to find chromium binary
-        chromium_paths = [
-            '/usr/bin/chromium-browser',
-            '/usr/bin/chromium',
-            '/snap/bin/chromium',
-            '/usr/bin/google-chrome',
-            '/usr/bin/chrome',
-        ]
+        # Try to find Chrome/Chromium binary
+        import platform
 
-        for path in chromium_paths:
-            if shutil.which(path) or Path(path).exists():
-                print(f"Found browser at: {path}")
-                chrome_options.binary_location = path
-                break
+        if platform.system() == 'Windows':
+            # Windows Chrome paths
+            chrome_paths = [
+                r'C:\Program Files\Google\Chrome\Application\chrome.exe',
+                r'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe',
+                os.path.expanduser(r'~\AppData\Local\Google\Chrome\Application\chrome.exe'),
+            ]
+            for path in chrome_paths:
+                if Path(path).exists():
+                    print(f"Found Chrome at: {path}")
+                    chrome_options.binary_location = path
+                    break
+        else:
+            # Linux/Mac paths
+            chromium_paths = [
+                '/usr/bin/chromium-browser',
+                '/usr/bin/chromium',
+                '/snap/bin/chromium',
+                '/usr/bin/google-chrome',
+                '/usr/bin/chrome',
+            ]
+            for path in chromium_paths:
+                if shutil.which(path) or Path(path).exists():
+                    print(f"Found browser at: {path}")
+                    chrome_options.binary_location = path
+                    break
 
         print(f"Initializing ChromeDriver (debug port {debug_port})...")
         if not self.headless:
