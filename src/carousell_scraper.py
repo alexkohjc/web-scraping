@@ -246,29 +246,63 @@ class CarousellScraper:
             # Carousell's structure may vary, so we'll try multiple approaches
             print("Searching for product listings on page...")
 
-            # Approach 1: Look for article tags or product cards
-            listing_selectors = [
-                'article',
-                '[data-testid*="listing"]',
-                '[class*="ProductCard"]',
-                '[class*="ListingCard"]',
-                'a[href*="/p/"]',  # Links to product pages
-            ]
+            # Approach: Find the product links first, then get their grandparent containers
+            # Carousell wraps each listing in a container that has the link nested inside
+            print("Looking for product links...")
+            product_links = self.driver.find_elements(By.CSS_SELECTOR, 'a[href*="/p/"]')
+            print(f"Found {len(product_links)} product links")
 
-            all_listings = []
-            for selector in listing_selectors:
-                try:
-                    print(f"Trying selector: {selector}")
-                    elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
-                    if elements:
-                        print(f"✓ Found {len(elements)} elements with selector: {selector}")
-                        all_listings = elements
-                        break
-                    else:
-                        print(f"  No elements found with: {selector}")
-                except Exception as e:
-                    print(f"  Error with selector {selector}: {e}")
-                    continue
+            if not product_links:
+                # Fallback to generic selectors
+                listing_selectors = [
+                    'article',
+                    '[data-testid*="listing-card"]',
+                    '[class*="ProductCard"]',
+                    '[class*="ListingCard"]',
+                ]
+                for selector in listing_selectors:
+                    try:
+                        print(f"Trying fallback selector: {selector}")
+                        elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                        if elements:
+                            print(f"✓ Found {len(elements)} elements with selector: {selector}")
+                            all_listings = elements
+                            break
+                    except Exception as e:
+                        print(f"  Error with selector {selector}: {e}")
+                        continue
+            else:
+                # Get the card containers (usually 2-3 levels up from the link)
+                print("Extracting unique listing card containers...")
+                unique_cards = []
+                seen_urls = set()
+
+                for link in product_links:
+                    try:
+                        url = link.get_attribute('href')
+                        if url and url not in seen_urls:
+                            seen_urls.add(url)
+
+                            # Try to find the card container by going up the DOM tree
+                            # The card is usually a div that contains all listing info
+                            current = link
+                            card = None
+
+                            # Go up max 5 levels to find a suitable container
+                            for _ in range(5):
+                                current = current.find_element(By.XPATH, './..')
+                                # Check if this element looks like a card (has substantial text)
+                                if current.text and len(current.text.split('\n')) >= 3:
+                                    card = current
+                                    break
+
+                            if card:
+                                unique_cards.append(card)
+                    except:
+                        continue
+
+                all_listings = unique_cards
+                print(f"Extracted {len(all_listings)} unique listing cards")
 
             if not all_listings:
                 print("Could not find any product listings. The page structure may have changed.")
@@ -296,6 +330,19 @@ class CarousellScraper:
                     # Get all text content for debugging
                     listing_text = listing.text
 
+                    # Debug: Print raw listing text
+                    if idx < 3:  # Only print first 3 for debugging
+                        print(f"\n--- DEBUG Listing {idx} ---")
+                        print(f"Tag: {listing.tag_name}")
+                        print(f"Text:\n{listing_text}")
+                        # Show individual lines for better debugging
+                        lines = listing_text.split('\n')
+                        print(f"Line breakdown ({len(lines)} lines):")
+                        for i, line in enumerate(lines):
+                            if line.strip():
+                                print(f"  [{i}]: '{line.strip()}'")
+                        print("---")
+
                     # Try to extract the link (URL)
                     try:
                         # Look for link element
@@ -315,78 +362,103 @@ class CarousellScraper:
                     except:
                         item_data['url'] = 'N/A'
 
-                    # Try to extract the title/name with more comprehensive selectors
+                    # Try to extract the title/name
+                    # Based on observed structure: [0]=seller, [1]=time, [2]=ITEM_NAME
                     try:
-                        # Try multiple selectors for title
-                        title_selectors = [
-                            'h3', 'h4', 'h2',
-                            'p[class*="title"]',
-                            '[class*="Title"]',
-                            '[class*="ProductCard"]',
-                            '[data-testid*="title"]',
-                            '[class*="name"]',
-                            'div[class*="D_zW"]',  # Common Carousell pattern
-                            'p[class*="D_"]',
-                        ]
                         title_text = None
-                        for sel in title_selectors:
-                            elems = listing.find_elements(By.CSS_SELECTOR, sel)
-                            if elems:
-                                for elem in elems:
-                                    text = elem.text.strip()
-                                    # Skip if it looks like a price
-                                    if text and '$' not in text and len(text) > 3:
-                                        title_text = text
-                                        break
-                                if title_text:
+
+                        # Primary method: Parse from text structure
+                        if listing_text:
+                            lines = [line.strip() for line in listing_text.split('\n') if line.strip()]
+
+                            # Find the time line first
+                            time_line_idx = -1
+                            for i, line in enumerate(lines):
+                                if 'ago' in line.lower() or 'just now' in line.lower():
+                                    time_line_idx = i
                                     break
 
-                        # Fallback: parse from all text
-                        if not title_text and listing_text:
-                            lines = [line.strip() for line in listing_text.split('\n') if line.strip()]
-                            # Look for the first line that's not a price, seller, or time
-                            for line in lines:
-                                if line and '$' not in line and not any(x in line.lower() for x in ['ago', 'hour', 'minute', 'day', 'week', 'month']):
-                                    if len(line) > 3:  # Reasonable title length
-                                        title_text = line
+                            # Item name is the line AFTER the time (line index 2 in most cases)
+                            if time_line_idx >= 0 and time_line_idx + 1 < len(lines):
+                                potential_title = lines[time_line_idx + 1]
+                                # Accept it as long as it's not obviously a price
+                                if potential_title and '$' not in potential_title:
+                                    title_text = potential_title
+
+                        # Fallback: Try CSS selectors only if text parsing failed
+                        if not title_text:
+                            title_selectors = [
+                                'h3', 'h4', 'h2',
+                                'p[class*="title"]',
+                                '[class*="Title"]',
+                                '[data-testid*="title"]',
+                            ]
+                            for sel in title_selectors:
+                                elems = listing.find_elements(By.CSS_SELECTOR, sel)
+                                if elems:
+                                    for elem in elems:
+                                        text = elem.text.strip()
+                                        # Must be substantial and not metadata
+                                        if (text and
+                                            len(text) > 15 and
+                                            '$' not in text and
+                                            'ago' not in text.lower()):
+                                            title_text = text
+                                            break
+                                    if title_text:
                                         break
 
-                        item_data['name'] = title_text if title_text else 'N/A'
+                        item_data['item_name'] = title_text if title_text else 'N/A'
                     except Exception as e:
                         print(f"Error extracting name: {e}")
-                        item_data['name'] = 'N/A'
+                        item_data['item_name'] = 'N/A'
 
-                    # Try to extract the price with regex
+                    # Try to extract the price
                     try:
                         import re
                         price_text = None
 
-                        # Try CSS selectors first
-                        price_selectors = [
-                            '[class*="price"]',
-                            '[class*="Price"]',
-                            '[data-testid*="price"]',
-                            'p[class*="D_"]',
-                            'span[class*="D_"]',
-                        ]
+                        # Method 1: Try to find price in innerHTML (sometimes prices are hidden from .text)
+                        try:
+                            inner_html = listing.get_attribute('innerHTML')
+                            if inner_html:
+                                # Look for price patterns in HTML
+                                price_match = re.search(r'(?:S\$|SGD|\\u0024)\s*[\d,]+(?:\.\d{2})?', inner_html)
+                                if price_match:
+                                    price_text = price_match.group().replace('\\u0024', '$').replace('SGD', 'S$')
+                        except:
+                            pass
 
-                        for sel in price_selectors:
-                            elems = listing.find_elements(By.CSS_SELECTOR, sel)
-                            if elems:
-                                for elem in elems:
-                                    text = elem.text.strip()
-                                    if '$' in text:
-                                        price_text = text
+                        # Method 2: Try CSS selectors
+                        if not price_text:
+                            price_selectors = [
+                                '[class*="price"]',
+                                '[class*="Price"]',
+                                '[data-testid*="price"]',
+                                'span:not([class*="time"])',  # Spans that aren't time
+                            ]
+
+                            for sel in price_selectors:
+                                elems = listing.find_elements(By.CSS_SELECTOR, sel)
+                                if elems:
+                                    for elem in elems:
+                                        text = elem.text.strip()
+                                        if text and '$' in text:
+                                            price_text = text
+                                            break
+                                    if price_text:
                                         break
-                                if price_text:
-                                    break
 
-                        # Fallback: search in all text for price pattern
+                        # Method 3: Search visible text for price pattern
                         if not price_text and listing_text:
-                            # Match patterns like: $100, S$100, $1,000, $10.50, etc.
                             price_match = re.search(r'S?\$\s*[\d,]+(?:\.\d{2})?', listing_text)
                             if price_match:
                                 price_text = price_match.group()
+
+                        # If still no price, it might be "Make Offer" or similar
+                        if not price_text:
+                            if 'make offer' in listing_text.lower() or 'make an offer' in listing_text.lower():
+                                price_text = 'Make Offer'
 
                         item_data['price'] = price_text if price_text else 'N/A'
                     except Exception as e:
@@ -500,21 +572,26 @@ class CarousellScraper:
                                     break
 
                         # Fallback: search for condition keywords in text
+                        # Only match lines that START with the condition (not embedded in title)
                         if not condition_text and listing_text:
                             condition_keywords = [
-                                'brand new', 'new', 'like new', 'lightly used',
-                                'well-maintained', 'heavily used', 'mint',
+                                'brand new', 'like new', 'lightly used', 'mint',
+                                'well-maintained', 'heavily used', 'almost new',
                                 'excellent condition', 'good condition', 'fair condition'
                             ]
                             text_lower = listing_text.lower()
                             for keyword in condition_keywords:
                                 if keyword in text_lower:
-                                    # Find the actual casing
+                                    # Find lines that START with this keyword (to avoid matching titles)
                                     lines = [line.strip() for line in listing_text.split('\n') if line.strip()]
                                     for line in lines:
-                                        if keyword in line.lower():
-                                            condition_text = line
-                                            break
+                                        line_lower = line.lower()
+                                        # Check if line starts with keyword or is just the keyword
+                                        if line_lower.startswith(keyword) or line_lower == keyword:
+                                            # Make sure it's SHORT (not a title)
+                                            if len(line) < 50:
+                                                condition_text = line
+                                                break
                                     if condition_text:
                                         break
 
@@ -523,10 +600,11 @@ class CarousellScraper:
                         print(f"Error extracting condition: {e}")
                         item_data['condition'] = 'N/A'
 
-                    # Only add if we have at least a URL or name
-                    if item_data.get('url') != 'N/A' or item_data.get('name') != 'N/A':
+                    # Only add if we have at least a URL or item_name
+                    if item_data.get('url') != 'N/A' or item_data.get('item_name') != 'N/A':
                         results.append(item_data)
-                        print(f"Extracted item {len(results)}: {item_data.get('name', 'N/A')[:50]}")
+                        print(f"Extracted item {len(results)}: {item_data.get('item_name', 'N/A')[:50]}")
+                        print(f"  URL: {item_data.get('url', 'N/A')[:80]}")
                         print(f"  Price: {item_data.get('price', 'N/A')}, Seller: {item_data.get('seller', 'N/A')}, Time: {item_data.get('time', 'N/A')}, Condition: {item_data.get('condition', 'N/A')}")
 
                 except Exception as e:

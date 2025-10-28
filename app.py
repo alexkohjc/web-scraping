@@ -125,8 +125,8 @@ if st.button("🚀 Start Scraping", type="primary", use_container_width=True):
 
                 # Reorder columns for better display
                 column_order = []
-                if 'name' in df.columns:
-                    column_order.append('name')
+                if 'item_name' in df.columns:
+                    column_order.append('item_name')
                 if 'price' in df.columns:
                     column_order.append('price')
                 if 'condition' in df.columns:
