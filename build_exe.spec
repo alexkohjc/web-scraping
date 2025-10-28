@@ -4,7 +4,41 @@ PyInstaller spec file for Carousell Scraper
 Build command: pyinstaller build_exe.spec
 """
 
+import os
+import sys
+
 block_cipher = None
+
+# Collect Streamlit data files
+def get_streamlit_datas():
+    """Collect Streamlit's static files"""
+    datas = []
+    try:
+        import streamlit
+        streamlit_path = os.path.dirname(streamlit.__file__)
+
+        # Add static files (required for web interface)
+        static_path = os.path.join(streamlit_path, 'static')
+        if os.path.exists(static_path):
+            datas.append((static_path, 'streamlit/static'))
+
+        # Add runtime files
+        runtime_path = os.path.join(streamlit_path, 'runtime')
+        if os.path.exists(runtime_path):
+            datas.append((runtime_path, 'streamlit/runtime'))
+
+        # Add vendor files if they exist
+        vendor_path = os.path.join(streamlit_path, 'vendor')
+        if os.path.exists(vendor_path):
+            datas.append((vendor_path, 'streamlit/vendor'))
+
+        print(f"✓ Collected Streamlit files from: {streamlit_path}")
+    except ImportError:
+        print("⚠ Warning: Could not collect Streamlit files. Make sure streamlit is installed.")
+
+    return datas
+
+streamlit_datas = get_streamlit_datas()
 
 a = Analysis(
     ['app_wrapper.py'],  # Use wrapper instead of app.py directly
@@ -13,11 +47,24 @@ a = Analysis(
     datas=[
         ('src', 'src'),  # Include the src folder
         ('app.py', '.'),  # Include app.py for the wrapper to run
-    ],
+    ] + streamlit_datas,  # Add Streamlit static files
     hiddenimports=[
         'streamlit',
         'streamlit.runtime.scriptrunner.magic_funcs',
         'streamlit.runtime.scriptrunner.script_requests_handler',
+        'streamlit.web.cli',
+        'streamlit.web.bootstrap',
+        'streamlit.runtime',
+        'streamlit.runtime.scriptrunner',
+        'streamlit.runtime.state',
+        'streamlit.components.v1',
+        'watchdog',
+        'watchdog.observers',
+        'watchdog.events',
+        'click',
+        'tornado',
+        'altair',
+        'validators',
         'selenium',
         'selenium.webdriver.chrome.service',
         'selenium.webdriver.firefox.service',
@@ -36,7 +83,7 @@ a = Analysis(
     ],
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=['fix_streamlit_hook.py'],  # Fix Streamlit metadata issue
     excludes=[
         'matplotlib',
         'scipy',
