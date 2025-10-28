@@ -7,11 +7,12 @@ Build command: pyinstaller build_exe.spec
 block_cipher = None
 
 a = Analysis(
-    ['app.py'],
+    ['app_wrapper.py'],  # Use wrapper instead of app.py directly
     pathex=[],
     binaries=[],
     datas=[
         ('src', 'src'),  # Include the src folder
+        ('app.py', '.'),  # Include app.py for the wrapper to run
     ],
     hiddenimports=[
         'streamlit',
