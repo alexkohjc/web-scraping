@@ -1,12 +1,18 @@
 [server]
-# Don't automatically open browser (WSL2 can't open GUI browsers)
 headless = true
-
-# Listen on all interfaces so Windows can access it
+port = 8501
+address = "localhost"
 enableCORS = false
 enableXsrfProtection = false
 
 [browser]
-# Don't try to open browser automatically
-gatherUsageStats = false
 serverAddress = "localhost"
+gatherUsageStats = false
+serverPort = 8501
+
+[global]
+developmentMode = false
+showWarningOnDirectExecution = false
+
+[theme]
+base = "light"

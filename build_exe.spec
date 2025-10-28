@@ -47,6 +47,7 @@ a = Analysis(
     datas=[
         ('src', 'src'),  # Include the src folder
         ('app.py', '.'),  # Include app.py for the wrapper to run
+        ('.streamlit', '.streamlit'),  # Include Streamlit config
     ] + streamlit_datas,  # Add Streamlit static files
     hiddenimports=[
         'streamlit',

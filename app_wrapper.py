@@ -23,6 +23,11 @@ def main():
         # Add src to path
         sys.path.insert(0, str(application_path / 'src'))
 
+        # Set Streamlit config directory
+        streamlit_config_dir = application_path / '.streamlit'
+        if streamlit_config_dir.exists():
+            os.environ['STREAMLIT_CONFIG_DIR'] = str(streamlit_config_dir)
+
         print("=" * 60)
         print("Carousell Scraper - Starting...")
         print("=" * 60)
@@ -66,8 +71,16 @@ def main():
             "run",
             str(application_path / "app.py"),
             "--server.headless=true",
+            "--server.port=8501",
+            "--server.address=localhost",
+            "--browser.serverAddress=localhost",
             "--browser.gatherUsageStats=false",
+            "--global.developmentMode=false",
         ]
+
+        print("Streamlit should open in your browser at: http://localhost:8501")
+        print("If it doesn't open automatically, copy and paste the URL above.")
+        print()
 
         sys.exit(stcli.main())
 
