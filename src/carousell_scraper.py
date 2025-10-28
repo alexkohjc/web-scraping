@@ -215,7 +215,7 @@ class CarousellScraper:
                 raise
 
             print("Waiting for page to settle...")
-            time.sleep(0.5)  # Reduced wait time for faster scraping
+            time.sleep(1.5)  # Give more time for initial content to load
 
             # Check if page actually loaded
             try:
@@ -224,12 +224,15 @@ class CarousellScraper:
             except:
                 print("Could not get page title")
 
-            # Scroll to load more items (skip if max_results is small)
-            if max_results > 10:
-                print("Scrolling to load more items...")
-                self._scroll_page(scrolls=2)
-            else:
-                print("Skipping scroll for small result set")
+            # Always scroll to load more items (Carousell uses lazy loading)
+            print("Scrolling to load all items...")
+            # Calculate scrolls based on max_results (each row typically has 4 items)
+            num_scrolls = max(2, (max_results // 4) + 1)
+            self._scroll_page(scrolls=num_scrolls)
+
+            # Extra wait for lazy-loaded content
+            print("Waiting for lazy-loaded content...")
+            time.sleep(1)
 
             # Wait for listings to load
             print("Waiting for page content to load...")
@@ -351,9 +354,9 @@ class CarousellScraper:
                     # Get all text content for debugging
                     listing_text = listing.text
 
-                    # Debug: Print raw listing text
-                    if idx < 3:  # Only print first 3 for debugging
-                        print(f"\n--- DEBUG Listing {idx} ---")
+                    # Debug: Print raw listing text for items 3-6 (4th-7th items)
+                    if 3 <= idx <= 6:
+                        print(f"\n--- DEBUG Listing {idx} (Item #{idx+1}) ---")
                         print(f"Tag: {listing.tag_name}")
                         print(f"Text:\n{listing_text}")
                         # Show individual lines for better debugging

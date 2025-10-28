@@ -176,10 +176,32 @@ if st.button("🚀 Start Scraping", type="primary", use_container_width=True):
                     use_container_width=True,
                     hide_index=True,
                     column_config={
+                        "Item Name": st.column_config.TextColumn(
+                            "Item Name",
+                            width="medium",  # Fixed medium width
+                            help="Product name"
+                        ),
+                        "Price": st.column_config.TextColumn(
+                            "Price",
+                            width="small"
+                        ),
+                        "Condition": st.column_config.TextColumn(
+                            "Condition",
+                            width="small"
+                        ),
+                        "Seller": st.column_config.TextColumn(
+                            "Seller",
+                            width="small"
+                        ),
+                        "Time": st.column_config.TextColumn(
+                            "Time",
+                            width="small"
+                        ),
                         "URL": st.column_config.LinkColumn(
                             "URL",
                             help="Click to view listing",
-                            display_text="View Listing"
+                            display_text="View Listing",
+                            width="small"
                         )
                     }
                 )
