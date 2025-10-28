@@ -154,24 +154,34 @@ if st.button("🚀 Start Scraping", type="primary", use_container_width=True):
                     valid_urls = df[df['url'] != 'N/A']['url'].count() if 'url' in df.columns else 0
                     st.metric("Valid Links", valid_urls)
 
-                # Make URLs clickable in the dataframe (before capitalizing)
-                if 'url' in df.columns:
-                    df['url'] = df['url'].apply(
-                        lambda x: f'<a href="{x}" target="_blank">View Listing</a>' if x != 'N/A' else 'N/A'
-                    )
-
-                # Capitalize column headers (do this last)
-                df.columns = df.columns.str.capitalize()
+                # Rename columns to proper titles
+                column_rename = {
+                    'item_name': 'Item Name',
+                    'price': 'Price',
+                    'condition': 'Condition',
+                    'seller': 'Seller',
+                    'time': 'Time',
+                    'url': 'URL'
+                }
+                df = df.rename(columns=column_rename)
 
                 st.markdown("---")
 
                 # Display table with clickable links
                 st.subheader("📊 Results")
 
-                # Display as HTML to support clickable links
-                st.markdown(
-                    df.to_html(escape=False, index=False),
-                    unsafe_allow_html=True
+                # Display as interactive sortable dataframe
+                st.dataframe(
+                    df,
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "URL": st.column_config.LinkColumn(
+                            "URL",
+                            help="Click to view listing",
+                            display_text="View Listing"
+                        )
+                    }
                 )
 
                 # Download button
