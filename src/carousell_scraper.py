@@ -277,32 +277,53 @@ class CarousellScraper:
                 unique_cards = []
                 seen_urls = set()
 
+                # Process only unique links first (faster)
+                unique_links = []
                 for link in product_links:
                     try:
                         url = link.get_attribute('href')
                         if url and url not in seen_urls:
                             seen_urls.add(url)
+                            unique_links.append(link)
+                            # Stop early if we have enough
+                            if len(unique_links) >= max_results:
+                                break
+                    except:
+                        continue
 
-                            # Try to find the card container by going up the DOM tree
-                            # The card is usually a div that contains all listing info
-                            current = link
-                            card = None
+                print(f"Found {len(unique_links)} unique product links, extracting containers...")
 
-                            # Go up max 5 levels to find a suitable container
-                            for _ in range(5):
+                # Now extract containers only for unique links
+                for idx, link in enumerate(unique_links):
+                    try:
+                        # Try to find the card container by going up the DOM tree
+                        # The card is usually a div that contains all listing info
+                        current = link
+                        card = None
+
+                        # Go up max 5 levels to find a suitable container
+                        for _ in range(5):
+                            try:
                                 current = current.find_element(By.XPATH, './..')
                                 # Check if this element looks like a card (has substantial text)
-                                if current.text and len(current.text.split('\n')) >= 3:
+                                text = current.text
+                                if text and len(text.split('\n')) >= 3:
                                     card = current
                                     break
+                            except:
+                                break
 
-                            if card:
-                                unique_cards.append(card)
+                        if card:
+                            unique_cards.append(card)
+
+                        # Progress indicator for large scrapes
+                        if idx > 0 and idx % 10 == 0:
+                            print(f"  Processed {idx}/{len(unique_links)} containers...")
                     except:
                         continue
 
                 all_listings = unique_cards
-                print(f"Extracted {len(all_listings)} unique listing cards")
+                print(f"✓ Extracted {len(all_listings)} unique listing cards")
 
             if not all_listings:
                 print("Could not find any product listings. The page structure may have changed.")
