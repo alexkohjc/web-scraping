@@ -6,6 +6,7 @@ Scrapes product listings from Carousell.sg search results
 import time
 import random
 import shutil
+from pathlib import Path
 from typing import List, Dict, Optional
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -69,116 +70,79 @@ class CarousellScraper:
             raise ValueError(f"Unsupported browser: {browser}")
 
     def _setup_chrome(self):
-        """Setup Chrome/Chromium driver with undetected-chromedriver"""
-        try:
-            import undetected_chromedriver as uc
-
-            print("Setting up undetected Chrome driver to bypass bot detection...")
-
-            # Configure options for undetected-chromedriver
-            options = uc.ChromeOptions()
-
-            # Headless mode (if requested)
-            if self.headless:
-                options.add_argument("--headless=new")
-
-            # Essential options for cloud environments
-            options.add_argument("--no-sandbox")
-            options.add_argument("--disable-dev-shm-usage")
-            options.add_argument("--disable-gpu")
-            options.add_argument("--window-size=1920,1080")
-
-            # Additional stealth options
-            options.add_argument("--disable-blink-features=AutomationControlled")
-            options.add_argument("--disable-extensions")
-            options.add_argument("--disable-setuid-sandbox")
-            options.add_argument("--disable-software-rasterizer")
-            options.add_argument("--mute-audio")
-            options.add_argument("--no-first-run")
-            options.add_argument("--ignore-certificate-errors")
-
-            # Set page load strategy
-            options.page_load_strategy = 'eager'
-
-            # Use undetected-chromedriver (automatically patches detection vectors)
-            print("Initializing undetected ChromeDriver...")
-            self.driver = uc.Chrome(
-                options=options,
-                driver_executable_path=None,  # Auto-detect
-                version_main=None,  # Auto-detect Chrome version
-                use_subprocess=True
-            )
-
-            # Set timeouts
-            self.driver.set_page_load_timeout(30)
-            self.driver.implicitly_wait(3)
-
-            print("Undetected Chrome driver setup complete!")
-
-        except ImportError:
-            print("undetected-chromedriver not available, falling back to standard Selenium...")
-            # Fallback to standard Chrome if undetected-chromedriver not available
-            self._setup_chrome_fallback()
-        except Exception as e:
-            raise RuntimeError(f"Failed to setup Chrome driver: {e}\nTry installing Firefox instead.")
-
-    def _setup_chrome_fallback(self):
-        """Fallback to standard Chrome/Chromium driver"""
+        """Setup Chrome/Chromium driver"""
         from selenium.webdriver.chrome.options import Options
+        import tempfile
 
-        print("Setting up standard Chrome driver...")
+        print("Setting up Chrome driver...")
         chrome_options = Options()
 
         if self.headless:
+            print("⚠️  Warning: Headless mode may trigger CAPTCHA. Consider disabling it for better results.")
             chrome_options.add_argument("--headless=new")
 
-        # Add options to make the browser appear more human-like
-        chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+        # Essential options for WSL2 compatibility
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--window-size=1920,1080")
-        chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
-        # WSL2 and headless-specific fixes for DevToolsActivePort error
-        chrome_options.add_argument("--remote-debugging-port=9222")
+        # Fix for DevToolsActivePort error - use unique port
+        debug_port = random.randint(9000, 9999)
+        chrome_options.add_argument(f"--remote-debugging-port={debug_port}")
+
+        # Create temporary user data directory to avoid conflicts
+        user_data_dir = tempfile.mkdtemp(prefix="chrome_profile_")
+        chrome_options.add_argument(f"--user-data-dir={user_data_dir}")
+
+        # Minimal additional flags for stability
         chrome_options.add_argument("--disable-extensions")
-        chrome_options.add_argument("--disable-setuid-sandbox")
-        chrome_options.add_argument("--disable-software-rasterizer")
-        chrome_options.add_argument("--disable-background-networking")
-        chrome_options.add_argument("--disable-default-apps")
         chrome_options.add_argument("--disable-sync")
-        chrome_options.add_argument("--metrics-recording-only")
-        chrome_options.add_argument("--mute-audio")
         chrome_options.add_argument("--no-first-run")
-        chrome_options.add_argument("--safebrowsing-disable-auto-update")
-        chrome_options.add_argument("--ignore-certificate-errors")
-        chrome_options.add_argument("--ignore-ssl-errors")
+
+        # Suppress unnecessary logging
+        chrome_options.add_argument("--log-level=3")
 
         # Set page load strategy to 'eager' for faster loading
         chrome_options.page_load_strategy = 'eager'
 
-        # Disable automation flags
-        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation", "enable-logging"])
-        chrome_options.add_experimental_option('useAutomationExtension', False)
+        # Try to find chromium binary
+        chromium_paths = [
+            '/usr/bin/chromium-browser',
+            '/usr/bin/chromium',
+            '/snap/bin/chromium',
+            '/usr/bin/google-chrome',
+            '/usr/bin/chrome',
+        ]
 
-        # Use Selenium Manager
-        print("Using Selenium Manager to auto-download matching ChromeDriver...")
-        self.driver = webdriver.Chrome(options=chrome_options)
+        for path in chromium_paths:
+            if shutil.which(path) or Path(path).exists():
+                print(f"Found browser at: {path}")
+                chrome_options.binary_location = path
+                break
+
+        print(f"Initializing ChromeDriver (debug port {debug_port})...")
+        if not self.headless:
+            print("Running in visible mode - browser window will open")
+
+        try:
+            self.driver = webdriver.Chrome(options=chrome_options)
+        except Exception as e:
+            print(f"Error initializing ChromeDriver: {e}")
+            print("\nTroubleshooting:")
+            print("1. Make sure Chromium is installed: sudo apt install chromium-browser")
+            print("2. Or try Firefox: sudo apt install firefox")
+            raise
 
         # Set timeouts to prevent hanging
         self.driver.set_page_load_timeout(30)
         self.driver.implicitly_wait(3)
 
-        # Execute script to hide webdriver property
-        self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        print("✓ Chrome driver setup complete!")
 
     def _setup_firefox(self):
         """Setup Firefox driver"""
         try:
             from selenium.webdriver.firefox.options import Options
-            from selenium.webdriver.firefox.service import Service
-            from webdriver_manager.firefox import GeckoDriverManager
 
             print("Setting up Firefox driver...")
             firefox_options = Options()
@@ -186,15 +150,14 @@ class CarousellScraper:
             if self.headless:
                 firefox_options.add_argument("--headless")
 
-            # Add options to make the browser appear more human-like
-            firefox_options.set_preference("dom.webdriver.enabled", False)
-            firefox_options.set_preference('useAutomationExtension', False)
-            firefox_options.set_preference("general.useragent.override",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0")
+            # Use Selenium Manager to auto-download GeckoDriver
+            self.driver = webdriver.Firefox(options=firefox_options)
 
-            # Setup driver with webdriver_manager
-            service = Service(GeckoDriverManager().install())
-            self.driver = webdriver.Firefox(service=service, options=firefox_options)
+            # Set timeouts
+            self.driver.set_page_load_timeout(30)
+            self.driver.implicitly_wait(3)
+
+            print("Firefox driver setup complete!")
 
         except Exception as e:
             raise RuntimeError(f"Failed to setup Firefox driver: {e}")
@@ -330,6 +293,9 @@ class CarousellScraper:
                 try:
                     item_data = {}
 
+                    # Get all text content for debugging
+                    listing_text = listing.text
+
                     # Try to extract the link (URL)
                     try:
                         # Look for link element
@@ -349,58 +315,219 @@ class CarousellScraper:
                     except:
                         item_data['url'] = 'N/A'
 
-                    # Try to extract the title/name
+                    # Try to extract the title/name with more comprehensive selectors
                     try:
-                        # Try multiple selectors for title (using find_elements for speed)
-                        title_selectors = ['h3', 'h4', 'p[class*="title"]', '[class*="Title"]', '[data-testid*="title"]']
+                        # Try multiple selectors for title
+                        title_selectors = [
+                            'h3', 'h4', 'h2',
+                            'p[class*="title"]',
+                            '[class*="Title"]',
+                            '[class*="ProductCard"]',
+                            '[data-testid*="title"]',
+                            '[class*="name"]',
+                            'div[class*="D_zW"]',  # Common Carousell pattern
+                            'p[class*="D_"]',
+                        ]
                         title_text = None
                         for sel in title_selectors:
                             elems = listing.find_elements(By.CSS_SELECTOR, sel)
                             if elems:
-                                title_text = elems[0].text.strip()
+                                for elem in elems:
+                                    text = elem.text.strip()
+                                    # Skip if it looks like a price
+                                    if text and '$' not in text and len(text) > 3:
+                                        title_text = text
+                                        break
                                 if title_text:
                                     break
 
-                        if not title_text and listing.text:
-                            # Fallback: use the first line of text
-                            title_text = listing.text.split('\n')[0]
+                        # Fallback: parse from all text
+                        if not title_text and listing_text:
+                            lines = [line.strip() for line in listing_text.split('\n') if line.strip()]
+                            # Look for the first line that's not a price, seller, or time
+                            for line in lines:
+                                if line and '$' not in line and not any(x in line.lower() for x in ['ago', 'hour', 'minute', 'day', 'week', 'month']):
+                                    if len(line) > 3:  # Reasonable title length
+                                        title_text = line
+                                        break
 
                         item_data['name'] = title_text if title_text else 'N/A'
-                    except:
+                    except Exception as e:
+                        print(f"Error extracting name: {e}")
                         item_data['name'] = 'N/A'
 
-                    # Try to extract the price
+                    # Try to extract the price with regex
                     try:
-                        # Look for price with $ symbol (using find_elements for speed)
+                        import re
+                        price_text = None
+
+                        # Try CSS selectors first
                         price_selectors = [
                             '[class*="price"]',
+                            '[class*="Price"]',
                             '[data-testid*="price"]',
+                            'p[class*="D_"]',
+                            'span[class*="D_"]',
                         ]
-                        price_text = None
 
                         for sel in price_selectors:
                             elems = listing.find_elements(By.CSS_SELECTOR, sel)
                             if elems:
-                                price_text = elems[0].text.strip()
-                                if price_text and '$' in price_text:
+                                for elem in elems:
+                                    text = elem.text.strip()
+                                    if '$' in text:
+                                        price_text = text
+                                        break
+                                if price_text:
                                     break
 
                         # Fallback: search in all text for price pattern
-                        if not price_text:
-                            import re
-                            text = listing.text
-                            price_match = re.search(r'S?\$\s*[\d,]+(?:\.\d{2})?', text)
+                        if not price_text and listing_text:
+                            # Match patterns like: $100, S$100, $1,000, $10.50, etc.
+                            price_match = re.search(r'S?\$\s*[\d,]+(?:\.\d{2})?', listing_text)
                             if price_match:
                                 price_text = price_match.group()
 
                         item_data['price'] = price_text if price_text else 'N/A'
-                    except:
+                    except Exception as e:
+                        print(f"Error extracting price: {e}")
                         item_data['price'] = 'N/A'
+
+                    # Try to extract seller name
+                    try:
+                        import re
+                        seller_name = None
+
+                        # Try CSS selectors
+                        seller_selectors = [
+                            '[class*="seller"]',
+                            '[class*="Seller"]',
+                            '[class*="username"]',
+                            '[class*="Username"]',
+                            '[data-testid*="seller"]',
+                            'a[href*="/u/"]',  # User profile links
+                        ]
+
+                        for sel in seller_selectors:
+                            elems = listing.find_elements(By.CSS_SELECTOR, sel)
+                            if elems:
+                                text = elems[0].text.strip()
+                                if text and len(text) > 0:
+                                    seller_name = text
+                                    break
+
+                        # Fallback: look for @username pattern or text near time
+                        if not seller_name and listing_text:
+                            lines = [line.strip() for line in listing_text.split('\n') if line.strip()]
+                            for line in lines:
+                                # Look for @username
+                                if line.startswith('@'):
+                                    seller_name = line
+                                    break
+                                # Look for username near time indicators
+                                if any(x in line.lower() for x in ['ago', 'hour', 'minute', 'day']):
+                                    # Previous line might be seller
+                                    idx_line = lines.index(line)
+                                    if idx_line > 0:
+                                        potential_seller = lines[idx_line - 1]
+                                        if '$' not in potential_seller and len(potential_seller) < 50:
+                                            seller_name = potential_seller
+                                            break
+
+                        item_data['seller'] = seller_name if seller_name else 'N/A'
+                    except Exception as e:
+                        print(f"Error extracting seller: {e}")
+                        item_data['seller'] = 'N/A'
+
+                    # Try to extract posting time
+                    try:
+                        import re
+                        time_text = None
+
+                        # Try CSS selectors
+                        time_selectors = [
+                            '[class*="time"]',
+                            '[class*="Time"]',
+                            '[class*="date"]',
+                            '[class*="Date"]',
+                            '[data-testid*="time"]',
+                        ]
+
+                        for sel in time_selectors:
+                            elems = listing.find_elements(By.CSS_SELECTOR, sel)
+                            if elems:
+                                text = elems[0].text.strip()
+                                if 'ago' in text.lower() or any(x in text.lower() for x in ['hour', 'minute', 'day', 'week', 'month', 'year']):
+                                    time_text = text
+                                    break
+
+                        # Fallback: search for time patterns in text
+                        if not time_text and listing_text:
+                            # Match patterns like "2 hours ago", "1 day ago", etc.
+                            time_match = re.search(r'\d+\s*(second|minute|hour|day|week|month|year)s?\s*ago', listing_text, re.IGNORECASE)
+                            if time_match:
+                                time_text = time_match.group()
+                            else:
+                                # Look for lines containing time indicators
+                                lines = [line.strip() for line in listing_text.split('\n') if line.strip()]
+                                for line in lines:
+                                    if 'ago' in line.lower():
+                                        time_text = line
+                                        break
+
+                        item_data['time'] = time_text if time_text else 'N/A'
+                    except Exception as e:
+                        print(f"Error extracting time: {e}")
+                        item_data['time'] = 'N/A'
+
+                    # Try to extract condition
+                    try:
+                        condition_text = None
+
+                        # Try CSS selectors
+                        condition_selectors = [
+                            '[class*="condition"]',
+                            '[class*="Condition"]',
+                            '[data-testid*="condition"]',
+                        ]
+
+                        for sel in condition_selectors:
+                            elems = listing.find_elements(By.CSS_SELECTOR, sel)
+                            if elems:
+                                text = elems[0].text.strip()
+                                if text:
+                                    condition_text = text
+                                    break
+
+                        # Fallback: search for condition keywords in text
+                        if not condition_text and listing_text:
+                            condition_keywords = [
+                                'brand new', 'new', 'like new', 'lightly used',
+                                'well-maintained', 'heavily used', 'mint',
+                                'excellent condition', 'good condition', 'fair condition'
+                            ]
+                            text_lower = listing_text.lower()
+                            for keyword in condition_keywords:
+                                if keyword in text_lower:
+                                    # Find the actual casing
+                                    lines = [line.strip() for line in listing_text.split('\n') if line.strip()]
+                                    for line in lines:
+                                        if keyword in line.lower():
+                                            condition_text = line
+                                            break
+                                    if condition_text:
+                                        break
+
+                        item_data['condition'] = condition_text if condition_text else 'N/A'
+                    except Exception as e:
+                        print(f"Error extracting condition: {e}")
+                        item_data['condition'] = 'N/A'
 
                     # Only add if we have at least a URL or name
                     if item_data.get('url') != 'N/A' or item_data.get('name') != 'N/A':
                         results.append(item_data)
                         print(f"Extracted item {len(results)}: {item_data.get('name', 'N/A')[:50]}")
+                        print(f"  Price: {item_data.get('price', 'N/A')}, Seller: {item_data.get('seller', 'N/A')}, Time: {item_data.get('time', 'N/A')}, Condition: {item_data.get('condition', 'N/A')}")
 
                 except Exception as e:
                     print(f"Error extracting data from listing {idx}: {str(e)}")

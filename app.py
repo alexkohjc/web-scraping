@@ -28,17 +28,25 @@ This tool allows you to search and scrape product listings from Carousell.sg.
 Simply enter your search term and the maximum number of results you want to retrieve.
 """)
 
-# Add a warning
+# Add warnings
 st.warning("⚠️ Please use this tool responsibly and respect Carousell's terms of service. The scraper includes delays to avoid overwhelming the server.")
+st.info("💡 **Tip:** Keep 'Headless Mode' disabled in the sidebar for best results. Headless mode often triggers CAPTCHA verification.")
 
 # Sidebar for settings
 with st.sidebar:
     st.header("⚙️ Settings")
 
+    dev_mode = st.checkbox(
+        "🔧 Dev Mode",
+        # value=False,
+        value=True,
+        help="Enable developer mode with pre-filled search term"
+    )
+
     headless_mode = st.checkbox(
         "Headless Mode",
-        value=True,
-        help="Run browser in headless mode (no visible window)"
+        value=False,
+        help="Run browser in headless mode (no visible window). Note: Headless mode may trigger CAPTCHA - keep this unchecked for better results."
     )
 
     st.markdown("---")
@@ -47,6 +55,9 @@ with st.sidebar:
     This scraper uses Selenium to extract product information including:
     - **Item Name**
     - **Price**
+    - **Condition** (brand new, lightly used, etc.)
+    - **Seller Name**
+    - **Posting Time**
     - **Product URL**
 
     ### Safety Features
@@ -62,6 +73,7 @@ col1, col2 = st.columns([3, 1])
 with col1:
     search_query = st.text_input(
         "🔍 Search Term",
+        value="rolex daytona" if dev_mode else "",
         placeholder="e.g., laptop, iPhone, furniture",
         help="Enter what you want to search for on Carousell.sg"
     )
@@ -71,7 +83,7 @@ with col2:
         "Max Results",
         min_value=1,
         max_value=100,
-        value=20,
+        value=5,
         step=5,
         help="Maximum number of results to retrieve"
     )
@@ -112,10 +124,24 @@ if st.button("🚀 Start Scraping", type="primary", use_container_width=True):
                 df = pd.DataFrame(results)
 
                 # Reorder columns for better display
-                if 'name' in df.columns and 'price' in df.columns and 'url' in df.columns:
-                    df = df[['name', 'price', 'url']]
+                column_order = []
+                if 'name' in df.columns:
+                    column_order.append('name')
+                if 'price' in df.columns:
+                    column_order.append('price')
+                if 'condition' in df.columns:
+                    column_order.append('condition')
+                if 'seller' in df.columns:
+                    column_order.append('seller')
+                if 'time' in df.columns:
+                    column_order.append('time')
+                if 'url' in df.columns:
+                    column_order.append('url')
 
-                # Display statistics
+                if column_order:
+                    df = df[column_order]
+
+                # Display statistics (before capitalizing headers)
                 col1, col2, col3 = st.columns(3)
                 with col1:
                     st.metric("Total Items", len(results))
@@ -128,16 +154,19 @@ if st.button("🚀 Start Scraping", type="primary", use_container_width=True):
                     valid_urls = df[df['url'] != 'N/A']['url'].count() if 'url' in df.columns else 0
                     st.metric("Valid Links", valid_urls)
 
-                st.markdown("---")
-
-                # Display table with clickable links
-                st.subheader("📊 Results")
-
-                # Make URLs clickable in the dataframe
+                # Make URLs clickable in the dataframe (before capitalizing)
                 if 'url' in df.columns:
                     df['url'] = df['url'].apply(
                         lambda x: f'<a href="{x}" target="_blank">View Listing</a>' if x != 'N/A' else 'N/A'
                     )
+
+                # Capitalize column headers (do this last)
+                df.columns = df.columns.str.capitalize()
+
+                st.markdown("---")
+
+                # Display table with clickable links
+                st.subheader("📊 Results")
 
                 # Display as HTML to support clickable links
                 st.markdown(
