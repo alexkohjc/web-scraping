@@ -387,7 +387,7 @@ class CarousellScraper:
                         item_data['url'] = 'N/A'
 
                     # Try to extract the title/name
-                    # Based on observed structure: [0]=seller, [1]=time, [2]=ITEM_NAME
+                    # Structure: [0]=seller, [1]=time, [2]=ITEM_NAME or "Buyer Protection", [3]=ITEM_NAME if [2] was badge
                     try:
                         title_text = None
 
@@ -402,9 +402,18 @@ class CarousellScraper:
                                     time_line_idx = i
                                     break
 
-                            # Item name is the line AFTER the time (line index 2 in most cases)
+                            # Item name is the line AFTER the time
                             if time_line_idx >= 0 and time_line_idx + 1 < len(lines):
                                 potential_title = lines[time_line_idx + 1]
+
+                                # Skip Carousell badges/features like "Buyer Protection"
+                                if potential_title.lower() in ['buyer protection', 'verified', 'featured']:
+                                    if idx < 10:  # Debug for first 10 items
+                                        print(f"  [Item {idx+1}] Detected '{potential_title}' badge, skipping to next line")
+                                    # Real item name is in the NEXT line
+                                    if time_line_idx + 2 < len(lines):
+                                        potential_title = lines[time_line_idx + 2]
+
                                 # Accept it as long as it's not obviously a price
                                 if potential_title and '$' not in potential_title:
                                     title_text = potential_title
@@ -612,8 +621,8 @@ class CarousellScraper:
                                         line_lower = line.lower()
                                         # Check if line starts with keyword or is just the keyword
                                         if line_lower.startswith(keyword) or line_lower == keyword:
-                                            # Make sure it's SHORT (not a title)
-                                            if len(line) < 50:
+                                            # Make sure it's SHORT (not a title) and not "Buyer Protection"
+                                            if len(line) < 50 and line.lower() != 'buyer protection':
                                                 condition_text = line
                                                 break
                                     if condition_text:
