@@ -32,9 +32,9 @@ def get_streamlit_datas():
         if os.path.exists(vendor_path):
             datas.append((vendor_path, 'streamlit/vendor'))
 
-        print(f"✓ Collected Streamlit files from: {streamlit_path}")
+        print(f"[OK] Collected Streamlit files from: {streamlit_path}")
     except ImportError:
-        print("⚠ Warning: Could not collect Streamlit files. Make sure streamlit is installed.")
+        print("[WARNING] Could not collect Streamlit files. Make sure streamlit is installed.")
 
     return datas
 
